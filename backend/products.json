@@ -1,0 +1,26 @@
+[
+  {
+    "id": 1,
+    "name": "Laptop",
+    "price": 54500,
+    "category": "Electronics",
+    "quantity": 4,
+    "description": "High performance laptop with 16GB RAM and 512GB SSD."
+  },
+  {
+    "id": 2,
+    "name": "Smartphone",
+    "price": 24999,
+    "category": "Electronics",
+    "quantity": 0,
+    "description": "5G smartphone with dual camera and long battery life."
+  },
+  {
+    "id": 3,
+    "name": "Wireless Headphones",
+    "price": 2999,
+    "category": "Audio",
+    "quantity": 0,
+    "description": "Noise-cancelling over-ear wireless headphones."
+  }
+]

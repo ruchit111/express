@@ -1,0 +1,50 @@
+[
+  {
+    "id": 1,
+    "customerName": "BHAVESH",
+    "customerNumber": "9158985722",
+    "items": [
+      {
+        "productId": 1,
+        "name": "Laptop",
+        "price": 54500,
+        "quantity": 1,
+        "total": 54500
+      }
+    ],
+    "grandTotal": 54500,
+    "date": "2026-06-11T20:00:00.000Z"
+  },
+  {
+    "id": 2,
+    "customerName": "ruchit",
+    "customerNumber": "7984813088",
+    "items": [
+      {
+        "productId": 2,
+        "name": "Smartphone",
+        "price": 24999,
+        "quantity": 1,
+        "total": 24999
+      }
+    ],
+    "grandTotal": 24999,
+    "date": "2026-06-12T02:55:53.027Z"
+  },
+  {
+    "id": 3,
+    "customerName": "rahul",
+    "customerNumber": "7854269854",
+    "items": [
+      {
+        "productId": 3,
+        "name": "Wireless Headphones",
+        "price": 2999,
+        "quantity": 2,
+        "total": 5998
+      }
+    ],
+    "grandTotal": 5998,
+    "date": "2026-06-12T02:56:37.834Z"
+  }
+]

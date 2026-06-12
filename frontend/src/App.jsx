@@ -1,21 +1,40 @@
 import { useEffect, useState } from 'react'
 import './App.css'
 
-const API_URL = '/api/users'
-
 function App() {
-  const [users, setUsers] = useState([])
-  const [formData, setFormData] = useState({
+  // Inventory State
+  const [products, setProducts] = useState([])
+  const [orders, setOrders] = useState([])
+  
+  // Product Management Form State
+  const [productForm, setProductForm] = useState({
     name: '',
-    email: '',
+    price: '',
+    category: '',
+    quantity: '',
+    description: ''
   })
-  const [message, setMessage] = useState('')
-  const [messageType, setMessageType] = useState('info') // 'info' | 'success' | 'error'
-  const [isLoading, setIsLoading] = useState(false)
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [deletingId, setDeletingId] = useState(null)
-  const [editingId, setEditingId] = useState(null)
+  const [editingProductId, setEditingProductId] = useState(null)
 
+  // Billing / Order Form State
+  const [billingForm, setBillingForm] = useState({
+    customerName: '',
+    customerNumber: '',
+    selectedProductId: '',
+    quantity: '1'
+  })
+  
+  // Order Cart State
+  const [cart, setCart] = useState([])
+
+  // UI Status State
+  const [message, setMessage] = useState('')
+  const [messageType, setMessageType] = useState('info') // 'success' | 'error' | 'info'
+  const [isLoading, setIsLoading] = useState(false)
+  const [isSubmittingProduct, setIsSubmittingProduct] = useState(false)
+  const [isSubmittingOrder, setIsSubmittingOrder] = useState(false)
+
+  // Notifications
   const showNotification = (msg, type = 'info') => {
     setMessage(msg)
     setMessageType(type)
@@ -24,193 +43,313 @@ function App() {
     }, 5000)
   }
 
-  const fetchUsers = async (clearMessage = true) => {
+  // Fetch Inventory and Orders
+  const fetchData = async () => {
     setIsLoading(true)
-    if (clearMessage) {
-      setMessage('')
-    }
-
     try {
-      const response = await fetch(API_URL)
-      const data = await response.json()
+      // Fetch products
+      const prodRes = await fetch('/api/products')
+      if (!prodRes.ok) throw new Error('Could not fetch products')
+      const prodData = await prodRes.json()
+      setProducts(prodData)
 
-      if (!response.ok) {
-        throw new Error(data.message || 'Could not fetch records')
-      }
-
-      setUsers(Array.isArray(data.users) ? data.users : [])
-    } catch (err) {
-      setUsers([])
-      showNotification(
-        'Could not connect to backend. Start the backend with npm start in the backend folder.',
-        'error'
-      )
-      console.error('Fetch records error:', err)
+      // Fetch orders
+      const ordRes = await fetch('/api/orders')
+      if (!ordRes.ok) throw new Error('Could not fetch orders')
+      const ordData = await ordRes.json()
+      setOrders(ordData)
+    } catch (error) {
+      console.error(error)
+      showNotification('Failed to connect to the backend. Please ensure the backend server is running.', 'error')
     } finally {
       setIsLoading(false)
     }
   }
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchUsers()
-    }, 0)
-    return () => clearTimeout(timer)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    fetchData()
   }, [])
 
-  const handleChange = (event) => {
-    const { name, value } = event.target
-    setFormData((currentData) => ({
-      ...currentData,
-      [name]: value,
+  // ---------------------------------------------
+  // PRODUCT CRUD HANDLERS
+  // ---------------------------------------------
+  const handleProductInputChange = (e) => {
+    const { name, value } = e.target
+    setProductForm(prev => ({
+      ...prev,
+      [name]: value
     }))
   }
 
-  const handleSubmit = async (event) => {
-    event.preventDefault()
-    setIsSubmitting(true)
-    setMessage('')
+  const handleProductSubmit = async (e) => {
+    e.preventDefault()
+    setIsSubmittingProduct(true)
+
+    const payload = {
+      name: productForm.name.trim(),
+      price: Number(productForm.price),
+      category: productForm.category.trim(),
+      quantity: Number(productForm.quantity),
+      description: productForm.description.trim()
+    }
 
     try {
-      const payload = {
-        name: formData.name.trim(),
-        email: formData.email.trim(),
-      }
-
-      const url = editingId ? `${API_URL}/${editingId}` : API_URL
-      const method = editingId ? 'PUT' : 'POST'
+      const url = editingProductId ? `/api/products/${editingProductId}` : '/api/products'
+      const method = editingProductId ? 'PUT' : 'POST'
 
       const response = await fetch(url, {
-        method: method,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
       })
       const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.message || `Could not ${editingId ? 'edit' : 'add'} record`)
+        throw new Error(data.message || 'Error saving product')
       }
 
-      showNotification(data.message || `Record ${editingId ? 'edited' : 'added'} successfully`, 'success')
+      showNotification(data.message || 'Product saved successfully', 'success')
       
-      setFormData({
+      // Reset Form
+      setProductForm({
         name: '',
-        email: '',
+        price: '',
+        category: '',
+        quantity: '',
+        description: ''
       })
-      setEditingId(null)
-      await fetchUsers(false)
+      setEditingProductId(null)
+
+      // Refresh Data
+      await fetchData()
     } catch (error) {
       showNotification(error.message, 'error')
     } finally {
-      setIsSubmitting(false)
+      setIsSubmittingProduct(false)
     }
   }
 
-  const handleDelete = async (userId) => {
-    if (!window.confirm('Are you sure you want to delete this record?')) return
-    
-    setDeletingId(userId)
-    setMessage('')
+  const handleEditProductClick = (product) => {
+    setEditingProductId(product.id)
+    setProductForm({
+      name: product.name,
+      price: product.price,
+      category: product.category,
+      quantity: product.quantity,
+      description: product.description || ''
+    })
+    window.scrollTo({ top: 150, behavior: 'smooth' })
+  }
+
+  const handleDeleteProductClick = async (productId) => {
+    if (!window.confirm('Are you sure you want to delete this product?')) return
 
     try {
-      const response = await fetch(`${API_URL}/${userId}`, {
-        method: 'DELETE',
+      const response = await fetch(`/api/products/${productId}`, {
+        method: 'DELETE'
       })
       const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.message || 'Could not delete record')
+        throw new Error(data.message || 'Error deleting product')
       }
 
-      showNotification(data.message || 'Record deleted successfully', 'success')
-      await fetchUsers(false)
+      showNotification(data.message || 'Product deleted successfully', 'success')
+      await fetchData()
     } catch (error) {
       showNotification(error.message, 'error')
-    } finally {
-      setDeletingId(null)
     }
   }
 
-  const handleEdit = (user) => {
-    setEditingId(user.id)
-    setMessage('')
-    setFormData({
-      name: user.name,
-      email: user.email,
+  const handleCancelProductEdit = () => {
+    setEditingProductId(null)
+    setProductForm({
+      name: '',
+      price: '',
+      category: '',
+      quantity: '',
+      description: ''
     })
-    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  const handleCancelEdit = () => {
-    setEditingId(null)
-    setMessage('')
-    setFormData({
-      name: '',
-      email: '',
-    })
+  // ---------------------------------------------
+  // BILLING & ORDER HANDLERS
+  // ---------------------------------------------
+  const handleBillingInputChange = (e) => {
+    const { name, value } = e.target
+    setBillingForm(prev => ({
+      ...prev,
+      [name]: value
+    }))
   }
+
+  const handleAddItemToCart = (e) => {
+    e.preventDefault()
+
+    const productId = Number(billingForm.selectedProductId)
+    const qtyToAdd = Number(billingForm.quantity)
+
+    if (!productId) {
+      showNotification('Please select a product first.', 'error')
+      return
+    }
+
+    if (isNaN(qtyToAdd) || qtyToAdd <= 0) {
+      showNotification('Please enter a valid quantity.', 'error')
+      return
+    }
+
+    const product = products.find(p => p.id === productId)
+    if (!product) {
+      showNotification('Selected product not found.', 'error')
+      return
+    }
+
+    // Check available stock
+    const existingCartItem = cart.find(item => item.productId === productId)
+    const currentCartQty = existingCartItem ? existingCartItem.quantity : 0
+    const totalProposedQty = currentCartQty + qtyToAdd
+
+    if (totalProposedQty > product.quantity) {
+      showNotification(`Cannot add. Available stock for ${product.name} is ${product.quantity}. You have ${currentCartQty} in cart and tried to add ${qtyToAdd} more.`, 'error')
+      return
+    }
+
+    if (existingCartItem) {
+      // Update quantity
+      setCart(prevCart => 
+        prevCart.map(item => 
+          item.productId === productId 
+            ? { ...item, quantity: totalProposedQty, total: product.price * totalProposedQty }
+            : item
+        )
+      )
+    } else {
+      // Add new item
+      const newItem = {
+        productId: product.id,
+        name: product.name,
+        price: product.price,
+        quantity: qtyToAdd,
+        total: product.price * qtyToAdd
+      }
+      setCart(prevCart => [...prevCart, newItem])
+    }
+
+    // Reset selector
+    setBillingForm(prev => ({
+      ...prev,
+      selectedProductId: '',
+      quantity: '1'
+    }))
+
+    showNotification(`Added ${product.name} to cart.`, 'success')
+  }
+
+  const handleRemoveCartItem = (productId) => {
+    setCart(prevCart => prevCart.filter(item => item.productId !== productId))
+  }
+
+  const handlePlaceOrderSubmit = async (e) => {
+    e.preventDefault()
+
+    if (!billingForm.customerName.trim()) {
+      showNotification('Customer Name is required to place an order.', 'error')
+      return
+    }
+    if (!billingForm.customerNumber.trim()) {
+      showNotification('Customer Number is required to place an order.', 'error')
+      return
+    }
+    if (cart.length === 0) {
+      showNotification('Please add at least one product to the cart.', 'error')
+      return
+    }
+
+    setIsSubmittingOrder(true)
+    const payload = {
+      customerName: billingForm.customerName.trim(),
+      customerNumber: billingForm.customerNumber.trim(),
+      items: cart
+    }
+
+    try {
+      const response = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to place order')
+      }
+
+      showNotification('Order placed successfully!', 'success')
+      
+      // Reset checkout form & cart
+      setCart([])
+      setBillingForm(prev => ({
+        ...prev,
+        customerName: '',
+        customerNumber: '',
+        selectedProductId: '',
+        quantity: '1'
+      }))
+
+      // Refresh data (stock quantities and orders list)
+      await fetchData()
+    } catch (error) {
+      showNotification(error.message, 'error')
+    } finally {
+      setIsSubmittingOrder(false)
+    }
+  }
+
+  // ---------------------------------------------
+  // CALCULATED METRICS
+  // ---------------------------------------------
+  const totalProducts = products.length
+  const totalOrders = orders.length
+  const totalSales = orders.reduce((sum, order) => sum + order.grandTotal, 0)
+  const lowStockProducts = products.filter(p => p.quantity < 5).length
+
+  // Grand Total of Active Cart
+  const grandCartTotal = cart.reduce((sum, item) => sum + item.total, 0)
+
+  // Selected Product details for Billing section
+  const selectedProduct = products.find(p => p.id === Number(billingForm.selectedProductId))
 
   return (
-    <main className="container">
-      <header className="app-header">
-        <div className="logo-badge">Hub</div>
-        <h1>User Records Directory</h1>
-        <p className="subtitle">Easily add, view, edit, and delete user profiles</p>
+    <main className="container animate-fade-in">
+      {/* Title Header Bar */}
+      <header className="app-header-bar">
+        <h1>Inventory & Billing System</h1>
       </header>
 
-      {/* Main Form container */}
-      <section className="form-card animate-fade-in">
-        <form onSubmit={handleSubmit}>
-          <div className="form-header">
-            <h2>{editingId ? 'Edit User Record' : 'Add New Record'}</h2>
-            {editingId && <span className="edit-badge">Editing ID: #{editingId}</span>}
-          </div>
-
-          <div className="form-grid">
-            <div className="form-group">
-              <label htmlFor="name">User Name</label>
-              <input
-                type="text"
-                id="name"
-                name="name"
-                value={formData.name}
-                onChange={handleChange}
-                placeholder="e.g. Rahul Sharma"
-                required
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="email">Email ID</label>
-              <input
-                type="email"
-                id="email"
-                name="email"
-                value={formData.email}
-                onChange={handleChange}
-                placeholder="e.g. rahul@example.com"
-                required
-              />
-            </div>
-          </div>
-
-          <div className="button-group">
-            <button type="submit" className="save-btn" disabled={isSubmitting}>
-              {isSubmitting ? 'Processing...' : editingId ? 'Update Record' : 'Submit'}
-            </button>
-            {editingId && (
-              <button type="button" className="cancel-btn" onClick={handleCancelEdit}>
-                Cancel
-              </button>
-            )}
-          </div>
-        </form>
+      {/* Statistics Dashboard Panels */}
+      <section className="stats-row">
+        <div className="stat-card">
+          <span className="stat-label">Total Products</span>
+          <span className="stat-value text-blue">{totalProducts}</span>
+        </div>
+        <div className="stat-card">
+          <span className="stat-label">Total Orders</span>
+          <span className="stat-value text-blue">{totalOrders}</span>
+        </div>
+        <div className="stat-card">
+          <span className="stat-label">Total Sales</span>
+          <span className="stat-value text-green">₹ {totalSales.toLocaleString('en-IN')}</span>
+        </div>
+        <div className="stat-card">
+          <span className="stat-label">Low Stock</span>
+          <span className={`stat-value ${lowStockProducts > 0 ? 'text-red animate-pulse' : 'text-blue'}`}>
+            {lowStockProducts}
+          </span>
+        </div>
       </section>
 
-      {/* Notification banner */}
+      {/* Global Alerts / Notification banner */}
       {message && (
         <div className={`notification ${messageType} animate-slide-in`}>
           <div className="notif-icon">
@@ -220,65 +359,330 @@ function App() {
         </div>
       )}
 
-      {/* Records section */}
-      <section className="directory-list" aria-live="polite">
-        <div className="directory-header">
-          <h2>Active User Directory</h2>
-          <span className="count-badge">{users.length} Records</span>
+      {/* Product Management Section */}
+      <section className="dashboard-section form-card">
+        <div className="section-title-bar">
+          <h2>Product Management</h2>
+        </div>
+        
+        <form onSubmit={handleProductSubmit} className="product-form">
+          <div className="form-grid">
+            <div className="form-group">
+              <label htmlFor="name">Product Name</label>
+              <input
+                type="text"
+                id="name"
+                name="name"
+                value={productForm.name}
+                onChange={handleProductInputChange}
+                placeholder="Product Name"
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="price">Price</label>
+              <input
+                type="number"
+                id="price"
+                name="price"
+                min="0"
+                step="any"
+                value={productForm.price}
+                onChange={handleProductInputChange}
+                placeholder="Price"
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="category">Category</label>
+              <input
+                type="text"
+                id="category"
+                name="category"
+                value={productForm.category}
+                onChange={handleProductInputChange}
+                placeholder="Category"
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="quantity">Quantity (Stock)</label>
+              <input
+                type="number"
+                id="quantity"
+                name="quantity"
+                min="0"
+                value={productForm.quantity}
+                onChange={handleProductInputChange}
+                placeholder="Quantity"
+                required
+              />
+            </div>
+
+            <div className="form-group full-width">
+              <label htmlFor="description">Description</label>
+              <textarea
+                id="description"
+                name="description"
+                value={productForm.description}
+                onChange={handleProductInputChange}
+                placeholder="Description"
+                rows="2"
+              ></textarea>
+            </div>
+          </div>
+
+          <div className="button-group">
+            <button type="submit" className="btn-primary" disabled={isSubmittingProduct}>
+              {isSubmittingProduct ? 'Saving...' : editingProductId ? 'Update Product' : 'Add Product'}
+            </button>
+            {editingProductId && (
+              <button type="button" className="btn-secondary" onClick={handleCancelProductEdit}>
+                Cancel
+              </button>
+            )}
+          </div>
+        </form>
+
+        {/* Product Inventory Table */}
+        <div className="table-responsive">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Price</th>
+                <th>Category</th>
+                <th>Stock</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {products.length > 0 ? (
+                products.map((product) => (
+                  <tr key={product.id} className={product.quantity < 5 ? 'row-low-stock' : ''}>
+                    <td className="font-bold">{product.name}</td>
+                    <td>₹ {product.price.toLocaleString('en-IN')}</td>
+                    <td><span className="category-badge">{product.category}</span></td>
+                    <td>
+                      <span className={`stock-badge ${product.quantity < 5 ? 'badge-danger' : 'badge-success'}`}>
+                        {product.quantity}
+                      </span>
+                    </td>
+                    <td>
+                      <div className="table-actions">
+                        <button
+                          type="button"
+                          className="btn-table btn-table-edit"
+                          onClick={() => handleEditProductClick(product)}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-table btn-table-delete"
+                          onClick={() => handleDeleteProductClick(product.id)}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="5" className="table-empty">
+                    No products available. Add one above.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {/* Place Order / Billing Section */}
+      <section className="dashboard-section form-card">
+        <div className="section-title-bar">
+          <h2>Place Order / Billing</h2>
         </div>
 
-        {isLoading ? (
-          <div className="loading-spinner-container">
-            <div className="spinner"></div>
-            <p>Retrieving user profiles...</p>
-          </div>
-        ) : users.length > 0 ? (
-          <div className="user-grid">
-            {users.map((user) => (
-              <article key={user.id} className="user-card animate-fade-in">
-                <div className="user-card-header">
-                  <div className="card-avatar">
-                    {user.name.charAt(0).toUpperCase()}
-                  </div>
-                  <div className="card-title">
-                    <h3>{user.name}</h3>
-                  </div>
-                  <span className="id-tag">ID #{user.id}</span>
-                </div>
-                
-                <div className="user-card-body">
-                  <div className="detail-item">
-                    <span className="detail-label">Email ID</span>
-                    <span className="detail-val">{user.email}</span>
-                  </div>
-                </div>
+        <form onSubmit={handleAddItemToCart} className="billing-item-form">
+          <div className="billing-grid">
+            <div className="form-group">
+              <label htmlFor="customerName">Customer Name</label>
+              <input
+                type="text"
+                id="customerName"
+                name="customerName"
+                value={billingForm.customerName}
+                onChange={handleBillingInputChange}
+                placeholder="Customer Name"
+                required
+              />
+            </div>
 
-                <div className="user-card-actions">
-                  <button
-                    type="button"
-                    className="action-btn edit"
-                    onClick={() => handleEdit(user)}
-                    disabled={isSubmitting || deletingId === user.id}
-                  >
-                    Edit Record
-                  </button>
-                  <button
-                    type="button"
-                    className="action-btn delete"
-                    onClick={() => handleDelete(user.id)}
-                    disabled={deletingId === user.id}
-                  >
-                    {deletingId === user.id ? 'Deleting...' : 'Delete'}
-                  </button>
+            <div className="form-group">
+              <label htmlFor="customerNumber">Customer Number</label>
+              <input
+                type="text"
+                id="customerNumber"
+                name="customerNumber"
+                value={billingForm.customerNumber}
+                onChange={handleBillingInputChange}
+                placeholder="Customer Number"
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="selectedProductId">Select Product</label>
+              <select
+                id="selectedProductId"
+                name="selectedProductId"
+                value={billingForm.selectedProductId}
+                onChange={handleBillingInputChange}
+                required
+              >
+                <option value="">Select Product</option>
+                {products.map(p => (
+                  <option key={p.id} value={p.id} disabled={p.quantity <= 0}>
+                    {p.name} (Price: ₹{p.price}, Stock: {p.quantity}) {p.quantity <= 0 ? '- OUT OF STOCK' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="billingQuantity">Quantity</label>
+              <input
+                type="number"
+                id="billingQuantity"
+                name="quantity"
+                min="1"
+                max={selectedProduct ? selectedProduct.quantity : undefined}
+                value={billingForm.quantity}
+                onChange={handleBillingInputChange}
+                required
+              />
+            </div>
+
+            <div className="form-group flex-end">
+              <button type="submit" className="btn-primary w-full">
+                Add Item
+              </button>
+            </div>
+          </div>
+        </form>
+
+        {/* Selected Items Cart Preview */}
+        <div className="selected-items-box">
+          <h3 className="sub-section-title">Selected Items</h3>
+          
+          {cart.length > 0 ? (
+            <div className="cart-list">
+              <table className="cart-table">
+                <thead>
+                  <tr>
+                    <th>Item</th>
+                    <th>Price</th>
+                    <th>Qty</th>
+                    <th>Total</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cart.map((item) => (
+                    <tr key={item.productId}>
+                      <td className="font-bold">{item.name}</td>
+                      <td>₹ {item.price.toLocaleString('en-IN')}</td>
+                      <td>{item.quantity}</td>
+                      <td>₹ {item.total.toLocaleString('en-IN')}</td>
+                      <td>
+                        <button
+                          type="button"
+                          className="btn-remove-item"
+                          onClick={() => handleRemoveCartItem(item.productId)}
+                          title="Remove item"
+                        >
+                          ✕
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              <div className="cart-summary-footer">
+                <div className="grand-total-label">
+                  Grand Total : <span className="grand-total-val">₹ {grandCartTotal.toLocaleString('en-IN')}</span>
                 </div>
-              </article>
+                <button
+                  type="button"
+                  className="btn-checkout"
+                  onClick={handlePlaceOrderSubmit}
+                  disabled={isSubmittingOrder}
+                >
+                  {isSubmittingOrder ? 'Placing Order...' : 'Place Order'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="cart-empty-state">
+              No items selected. Add products to include them in the order.
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* Order History Section */}
+      <section className="dashboard-section form-card">
+        <div className="section-title-bar">
+          <h2>Order History</h2>
+        </div>
+
+        {orders.length > 0 ? (
+          <div className="order-history-list">
+            {orders.slice().reverse().map((order) => (
+              <div key={order.id} className="order-history-card animate-fade-in">
+                <div className="order-card-header">
+                  <div>
+                    <h3 className="customer-title">{order.customerName}</h3>
+                    <p className="customer-number">{order.customerNumber}</p>
+                    <span className="order-date">
+                      {new Date(order.date).toLocaleString('en-IN', {
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </span>
+                  </div>
+                  <div className="order-total-price">
+                    Total : ₹ {order.grandTotal.toLocaleString('en-IN')}
+                  </div>
+                </div>
+                <div className="order-card-details">
+                  <span className="details-header-label">Items:</span>
+                  <div className="order-items-grid">
+                    {order.items.map((item, idx) => (
+                      <span key={idx} className="order-item-tag">
+                        {item.name} ({item.quantity} × ₹{item.price})
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
             ))}
           </div>
         ) : (
           <div className="empty-state">
-            <div className="empty-icon">👥</div>
-            <p>No user directory profiles found.</p>
-            <p className="subtext">Fill in the form above to add a new record.</p>
+            <div className="empty-icon">📦</div>
+            <p>No order history found.</p>
+            <p className="subtext">Completed orders will be recorded here.</p>
           </div>
         )}
       </section>
